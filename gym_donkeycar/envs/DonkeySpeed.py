@@ -1,8 +1,3 @@
-"""
-file: donkey_sim.py
-author: Tawn Kramer
-date: 2018-08-31
-"""
 import base64
 import logging
 import math
@@ -18,75 +13,14 @@ from gym_donkeycar.core.fps import FPSTimer
 from gym_donkeycar.core.message import IMesgHandler
 from gym_donkeycar.core.sim_client import SimClient
 
-from gym_donkeycar.envs.DonkeyAlongYellowLine import DonkeyAlongYellowLineUnitySimHandler
-from gym_donkeycar.envs.DonkeySpeed import DonkeySpeed
+from ae.wrapper import AutoencoderWrapper
+from ae.autoencoder import load_ae
 
 logger = logging.getLogger(__name__)
 
+index = 0
 
-class DonkeyUnitySimContoller:
-    def __init__(self, conf: Dict[str, Any]):
-        logger.setLevel(conf["log_level"])
-
-        self.address = (conf["host"], conf["port"])
-
-        #DonkeySpeedAndDistanceUnitySimHandler
-        self.handler = DonkeySpeed(conf=conf)
-
-        self.client = SimClient(self.address, self.handler)
-
-    def set_car_config(
-        self,
-        body_style: str,
-        body_rgb: Tuple[int, int, int],
-        car_name: str,
-        font_size: int,
-    ) -> None:
-        self.handler.send_car_config(body_style, body_rgb, car_name, font_size)
-
-    def set_cam_config(self, **kwargs) -> None:
-        self.handler.send_cam_config(**kwargs)
-
-    def set_reward_fn(self, reward_fn: Callable) -> None:
-        self.handler.set_reward_fn(reward_fn)
-
-    def set_episode_over_fn(self, ep_over_fn: Callable) -> None:
-        self.handler.set_episode_over_fn(ep_over_fn)
-
-    def wait_until_loaded(self) -> None:
-        while not self.handler.loaded:
-            logger.warning("waiting for sim to start..")
-            time.sleep(3.0)
-
-    def reset(self) -> None:
-        self.handler.reset()
-
-    def get_sensor_size(self) -> Tuple[int, int, int]:
-        return self.handler.get_sensor_size()
-
-    def take_action(self, action: np.ndarray):
-        self.handler.take_action(action)
-
-    def observe(self) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
-        return self.handler.observe()
-
-    def quit(self) -> None:
-        self.client.stop()
-
-    def exit_scene(self) -> None:
-        self.handler.send_exit_scene()
-
-    def render(self, mode: str) -> None:
-        pass
-
-    def is_game_over(self) -> bool:
-        return self.handler.is_game_over()
-
-    def calc_reward(self, done: bool) -> float:
-        return self.handler.calc_reward(done)
-
-
-class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
+class DonkeySpeed(IMesgHandler):
     def __init__(self, conf: Dict[str, Any]):
         self.conf = conf
         self.SceneToLoad = conf["level"]
@@ -153,6 +87,11 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
         self.lap_count = 0
         self.trip_duration = 0.0
         self.trip_start_time = time.time()
+
+        ae_path = '/Users/v/Documents/DonkeyRL/aae-train-donkeycar/logs/ae-32_1651319488_best.pkl'
+        self.ae = load_ae(ae_path)
+        self.reconstructed_image = []
+        self.last_reward = None
 
     def on_connect(self, client: SimClient) -> None:
         logger.debug("socket connected")
@@ -333,7 +272,7 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
                 conf["body_rgb"],
                 conf["car_name"],
                 conf["font_size"],
-            )
+            )            
 
     def set_racer_bio(self, conf: Dict[str, Any]) -> None:
         if "bio" in conf:
@@ -344,6 +283,14 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
                 conf["country"],
                 conf["guid"],
             )
+        
+        self.send_racer_bio(
+            conf["racer_name"],
+            conf["car_name"],
+            conf["bio"],
+            conf["country"],
+            conf["guid"],
+        )
 
     def on_recv_message(self, message: Dict[str, Any]) -> None:
         if "msg_type" not in message:
@@ -401,6 +348,8 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
         self.pitch = 0.0
         self.yaw = 0.0
 
+        self.last_reward = None
+
     def get_sensor_size(self) -> Tuple[int, int, int]:
         return self.camera_img_size
 
@@ -415,6 +364,7 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
         observation = self.image_array
         done = self.is_game_over()
         reward = self.calc_reward(done)
+        self.last_reward = reward
 
         info = {
             "pos": (self.x, self.y, self.z),
@@ -452,7 +402,7 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
 
     def calc_reward(self, done: bool) -> float:
         
-        #print( f'Done={done}' )
+        #print( f'cte={self.cte+2} max_ctr{self.max_cte}' )
         self.trip_duration = time.time() - self.trip_start_time
 
         val = 0
@@ -460,24 +410,17 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
         if done:
 
             if self.hit != "none":
-                val = ( -20000.0 / self.trip_duration ) / self.speed
+                val = -2.0 / self.speed
             else:
-                val = -1.0
+                val = 1.0 * self.speed 
 
-            print( f'Final_Reward={val}, trip_ducation={self.trip_duration}, speed={self.speed}' )
+            print( f'Final_Reward={val}, speed={self.speed}' )
 
             return val
 
-        #print( self.current_lap_time, self.lap_count )
-        #if self.cte > self.max_cte:
-        #    return -1.0
-        
-        if self.hit != "none":
-            val += ( -200.0 / self.trip_duration ) / self.speed
-        else:
-            val += 10.0 * self.trip_duration * self.speed
+        val += 2 * self.speed
 
-        print( f'Reward={val}, trip_ducation={self.trip_duration}, speed={self.speed}' )
+        print( f'Reward={val}, speed={self.speed}' )
 
         # going fast close to the center of lane yeilds best reward
         return val
@@ -486,18 +429,56 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
 
     def on_telemetry(self, message: Dict[str, Any]) -> None:
 
+        global index
+
         img_string = message["image"]
         image = Image.open(BytesIO(base64.b64decode(img_string)))
 
         # always update the image_array as the observation loop will hang if not changing.
         self.image_array = np.asarray(image)
+
+        import cv2
+
+        encoded_image = self.ae.encode_from_raw_image( self.image_array[:, :, ::-1] )
+        self.reconstructed_image = self.ae.decode( encoded_image )[0]
+        
+        imageContg = np.ascontiguousarray( self.reconstructed_image)
+        imageContg.flags['C_CONTIGUOUS']
+
+        img_path = f"/Users/v/Documents/DonkeyRL/aae-train-donkeycar/logs/images/rimg_{index}.png"
+        index += 1
+
+        cv2.imwrite( img_path, self.reconstructed_image )
+
+        msg = {
+            "msg_type": "debug",
+            "image": base64.b64encode( imageContg ).decode("utf8"),
+            "path": img_path,
+        }
+
+        if index >= 100:
+            index = 0
+
+        self.client.queue_message(msg)
+
+        # cv2.imshow( "Original image", self.reconstructed_image[:, :, ::-1] )
+        #print( self.reconstructed_image )
+        #cv2.imwrite( "/Users/v/Documents/DonkeyRL/aae-train-donkeycar/logs/shit.png", self.reconstructed_image )
+        # k = cv2.waitKey(0) & 0xFF
+        # if k == 27:
+        #     pass
+
+
+        #self.reconstructed_image = 
+
+
         self.time_received = time.time()
 
         if "image_b" in message:
             img_string_b = message["image_b"]
             image_b = Image.open(BytesIO(base64.b64decode(img_string_b)))
             self.image_array_b = np.asarray(image_b)
-
+        
         if "pos_x" in message:
             self.x = message["pos_x"]
             self.y = message["pos_y"]
@@ -617,12 +598,15 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
     def send_control(self, steer: float, throttle: float) -> None:
         if not self.loaded:
             return
+
         msg = {
             "msg_type": "control",
             "steering": steer.__str__(),
             "throttle": throttle.__str__(),
             "brake": "0.0",
+            "info": f"Reward: {str(self.last_reward)}" ,
         }
+
         self.queue_message(msg)
 
     def send_reset_car(self) -> None:

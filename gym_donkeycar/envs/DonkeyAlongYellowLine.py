@@ -1,8 +1,3 @@
-"""
-file: donkey_sim.py
-author: Tawn Kramer
-date: 2018-08-31
-"""
 import base64
 import logging
 import math
@@ -18,75 +13,9 @@ from gym_donkeycar.core.fps import FPSTimer
 from gym_donkeycar.core.message import IMesgHandler
 from gym_donkeycar.core.sim_client import SimClient
 
-from gym_donkeycar.envs.DonkeyAlongYellowLine import DonkeyAlongYellowLineUnitySimHandler
-from gym_donkeycar.envs.DonkeySpeed import DonkeySpeed
-
 logger = logging.getLogger(__name__)
 
-
-class DonkeyUnitySimContoller:
-    def __init__(self, conf: Dict[str, Any]):
-        logger.setLevel(conf["log_level"])
-
-        self.address = (conf["host"], conf["port"])
-
-        #DonkeySpeedAndDistanceUnitySimHandler
-        self.handler = DonkeySpeed(conf=conf)
-
-        self.client = SimClient(self.address, self.handler)
-
-    def set_car_config(
-        self,
-        body_style: str,
-        body_rgb: Tuple[int, int, int],
-        car_name: str,
-        font_size: int,
-    ) -> None:
-        self.handler.send_car_config(body_style, body_rgb, car_name, font_size)
-
-    def set_cam_config(self, **kwargs) -> None:
-        self.handler.send_cam_config(**kwargs)
-
-    def set_reward_fn(self, reward_fn: Callable) -> None:
-        self.handler.set_reward_fn(reward_fn)
-
-    def set_episode_over_fn(self, ep_over_fn: Callable) -> None:
-        self.handler.set_episode_over_fn(ep_over_fn)
-
-    def wait_until_loaded(self) -> None:
-        while not self.handler.loaded:
-            logger.warning("waiting for sim to start..")
-            time.sleep(3.0)
-
-    def reset(self) -> None:
-        self.handler.reset()
-
-    def get_sensor_size(self) -> Tuple[int, int, int]:
-        return self.handler.get_sensor_size()
-
-    def take_action(self, action: np.ndarray):
-        self.handler.take_action(action)
-
-    def observe(self) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
-        return self.handler.observe()
-
-    def quit(self) -> None:
-        self.client.stop()
-
-    def exit_scene(self) -> None:
-        self.handler.send_exit_scene()
-
-    def render(self, mode: str) -> None:
-        pass
-
-    def is_game_over(self) -> bool:
-        return self.handler.is_game_over()
-
-    def calc_reward(self, done: bool) -> float:
-        return self.handler.calc_reward(done)
-
-
-class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
+class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
     def __init__(self, conf: Dict[str, Any]):
         self.conf = conf
         self.SceneToLoad = conf["level"]
@@ -452,7 +381,7 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
 
     def calc_reward(self, done: bool) -> float:
         
-        #print( f'Done={done}' )
+        #print( f'cte={self.cte+2} max_ctr{self.max_cte}' )
         self.trip_duration = time.time() - self.trip_start_time
 
         val = 0
@@ -460,7 +389,8 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
         if done:
 
             if self.hit != "none":
-                val = ( -20000.0 / self.trip_duration ) / self.speed
+                #val = ( -20000.0 / self.trip_duration ) / self.speed
+                val = -2.0 #/ self.trip_duration ) / self.speed
             else:
                 val = -1.0
 
@@ -472,12 +402,23 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
         #if self.cte > self.max_cte:
         #    return -1.0
         
-        if self.hit != "none":
-            val += ( -200.0 / self.trip_duration ) / self.speed
-        else:
-            val += 10.0 * self.trip_duration * self.speed
+        cte = self.cte + 2
 
-        print( f'Reward={val}, trip_ducation={self.trip_duration}, speed={self.speed}' )
+        # if self.hit != "none":
+        #     val += ( -200.0 / self.trip_duration ) / self.speed
+        if cte < 0.1 and cte > -0.1:
+            print( "CTE branch..........")
+            #val += 10.0 * 1/( 0.1 + cte**4 ) * self.trip_duration * self.speed
+            int_val = 1.0 * 1/( 0.1 + abs(cte) ) * self.speed
+
+            val += int_val #if int_val <= 5 else 5
+
+        else:
+            #val += -100 * abs(cte) #+ 10 * self.trip_duration * self.speed
+            val += -1 * abs(cte) / self.speed #+ 10 * self.trip_duration * self.speed
+            #val += 100 * 1/( 0.1 + cte**4 ) * 10.0 * self.trip_duration * self.speed
+
+        print( f'Reward={val}, cte={cte}, trip_ducation={self.trip_duration}, speed={self.speed}' )
 
         # going fast close to the center of lane yeilds best reward
         return val
