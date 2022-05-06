@@ -452,7 +452,7 @@ class DonkeySpeed(IMesgHandler):
 
         msg = {
             "msg_type": "debug",
-            "image": base64.b64encode( imageContg ).decode("utf8"),
+            "image": "", #base64.b64encode( imageContg ).decode("utf8"),
             "path": img_path,
         }
 
@@ -557,12 +557,14 @@ class DonkeySpeed(IMesgHandler):
     def determine_episode_over(self):
         # we have a few initial frames on start that are sometimes very large CTE when it's behind
         # the path just slightly. We ignore those.
-        if math.fabs(self.cte) > 2 * self.max_cte:
-            pass
+
         # elif math.fabs(self.cte) > self.max_cte:
         #     logger.debug(f"game over: cte {self.cte}")
         #     print( f"game over: cte {self.cte}" )
         #     self.over = True
+        if self.speed < 0.01 and self.trip_duration > 15:
+            print( "game over: Speed is to low" )
+            self.over = True
         elif self.hit != "none":
             logger.debug(f"game over: hit {self.hit}")
             print( f"game over: hit {self.hit}" )
@@ -575,6 +577,8 @@ class DonkeySpeed(IMesgHandler):
             logger.debug("disqualified")
             print( "disqualified" )
             self.over = True
+        # elif math.fabs(self.cte) > 2 * self.max_cte:
+        #     pass
 
     def on_scene_selection_ready(self, message: Dict[str, Any]) -> None:
         logger.debug("SceneSelectionReady")
