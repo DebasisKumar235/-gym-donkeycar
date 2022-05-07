@@ -437,40 +437,6 @@ class DonkeySpeed(IMesgHandler):
         # always update the image_array as the observation loop will hang if not changing.
         self.image_array = np.asarray(image)
 
-        import cv2
-
-        encoded_image = self.ae.encode_from_raw_image( self.image_array[:, :, ::-1] )
-        self.reconstructed_image = self.ae.decode( encoded_image )[0]
-        
-        imageContg = np.ascontiguousarray( self.reconstructed_image)
-        imageContg.flags['C_CONTIGUOUS']
-
-        img_path = f"/Users/v/Documents/DonkeyRL/aae-train-donkeycar/logs/images/rimg_{index}.png"
-        index += 1
-
-        cv2.imwrite( img_path, self.reconstructed_image )
-
-        msg = {
-            "msg_type": "debug",
-            "image": "", #base64.b64encode( imageContg ).decode("utf8"),
-            "path": img_path,
-        }
-
-        if index >= 100:
-            index = 0
-
-        self.client.queue_message(msg)
-
-        # cv2.imshow( "Original image", self.reconstructed_image[:, :, ::-1] )
-        #print( self.reconstructed_image )
-        #cv2.imwrite( "/Users/v/Documents/DonkeyRL/aae-train-donkeycar/logs/shit.png", self.reconstructed_image )
-        # k = cv2.waitKey(0) & 0xFF
-        # if k == 27:
-        #     pass
-
-
-        #self.reconstructed_image = 
-
 
         self.time_received = time.time()
 
@@ -523,6 +489,40 @@ class DonkeySpeed(IMesgHandler):
 
 
         self.determine_episode_over()
+
+        # import cv2
+
+        # encoded_image = self.ae.encode_from_raw_image( self.image_array[:, :, ::-1] )
+        # self.reconstructed_image = self.ae.decode( encoded_image )[0]
+        
+        # imageContg = np.ascontiguousarray( self.reconstructed_image)
+        # imageContg.flags['C_CONTIGUOUS']
+
+        # img_path = f"/Users/v/Documents/DonkeyRL/aae-train-donkeycar/logs/images/rimg_{index}.png"
+        # index += 1
+
+        # cv2.imwrite( img_path, self.reconstructed_image )
+
+        # msg = {
+        #     "msg_type": "debug",
+        #     "image": "", #base64.b64encode( imageContg ).decode("utf8"),
+        #     "path": img_path,
+        # }
+
+        # if index >= 100:
+        #     index = 0
+
+        #self.client.queue_message(msg)
+
+        # cv2.imshow( "Original image", self.reconstructed_image[:, :, ::-1] )
+        #print( self.reconstructed_image )
+        #cv2.imwrite( "/Users/v/Documents/DonkeyRL/aae-train-donkeycar/logs/shit.png", self.reconstructed_image )
+        # k = cv2.waitKey(0) & 0xFF
+        # if k == 27:
+        #     pass
+
+
+        #self.reconstructed_image = 
 
     def on_cross_start(self, message: Dict[str, Any]) -> None:
         logger.info(f"crossed start line: lap_time {message['lap_time']}")
