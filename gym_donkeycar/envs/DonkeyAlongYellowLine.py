@@ -80,6 +80,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.current_lap_time = 0.0
         self.starting_line_index = -1
         self.lap_count = 0
+        self.trip_distance = 0.0
         self.trip_duration = 0.0
         self.trip_start_time = time.time()
 
@@ -303,6 +304,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.y = 0.0
         self.z = 0.0
         self.speed = 0.0
+        self.trip_distance = 0.0
         
         if self.over == True:
             self.trip_duration = 0.0
@@ -388,9 +390,8 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
 
         if done:
 
-            if self.hit != "none":
-                #val = ( -20000.0 / self.trip_duration ) / self.speed
-                val = -2.0 #/ self.trip_duration ) / self.speed
+            if self.hit != "none" and self.hit != "Donkey_new_phys(Clone)":
+                val = -2.0 #( -20000.0 / self.trip_duration ) / self.speed
             else:
                 val = -1.0
 
@@ -402,23 +403,30 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         #if self.cte > self.max_cte:
         #    return -1.0
         
-        cte = self.cte + 2
+        #cte = self.cte + 2 # for generated-road-v0
+        cte = self.cte
 
         # if self.hit != "none":
         #     val += ( -200.0 / self.trip_duration ) / self.speed
-        if cte < 0.1 and cte > -0.1:
-            print( "CTE branch..........")
-            #val += 10.0 * 1/( 0.1 + cte**4 ) * self.trip_duration * self.speed
-            int_val = 1.0 * 1/( 0.1 + abs(cte) ) * self.speed
+        # if cte < 0.3 and cte > -0.3:
+        #     print( "CTE branch..........")
+        #     val += 10.0/( 0.1 + cte**4 ) * self.trip_duration * self.speed
+        #     #int_val = 1.0 * 1/( 0.1 + abs(cte) ) * self.speed
 
-            val += int_val #if int_val <= 5 else 5
+        #     #val += int_val #if int_val <= 5 else 5
 
+        # else:
+        #     val += 10.0/( 0.1 + cte**4 ) * self.trip_duration * self.speed
+        #     #val += -100 * abs(cte) #+ 10 * self.trip_duration * self.speed
+        #     #val += -1 * abs(cte) / self.speed #+ 10 * self.trip_duration * self.speed
+        #     #val += 100 * 1/( 0.1 + cte**4 ) * 10.0 * self.trip_duration * self.speed
+
+        if self.trip_distance > 4.0:
+            val += 0*10.0/( 0.1 + cte**4 ) + 0.9 * self.trip_distance + 0.5 * self.speed
         else:
-            #val += -100 * abs(cte) #+ 10 * self.trip_duration * self.speed
-            val += -1 * abs(cte) / self.speed #+ 10 * self.trip_duration * self.speed
-            #val += 100 * 1/( 0.1 + cte**4 ) * 10.0 * self.trip_duration * self.speed
-
-        print( f'Reward={val}, cte={cte}, trip_ducation={self.trip_duration}, speed={self.speed}' )
+            val = -10.0
+        
+        print( f'Reward={val}, distance={self.trip_distance}, trip_duration={self.trip_distance/self.speed}, speed={self.speed}' )
 
         # going fast close to the center of lane yeilds best reward
         return val
@@ -440,6 +448,9 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             self.image_array_b = np.asarray(image_b)
 
         if "pos_x" in message:
+            if self.x != 0.0:
+                self.trip_distance += math.sqrt( (self.x - message["pos_x"])**2 + (self.z - message["pos_z"])**2 )
+
             self.x = message["pos_x"]
             self.y = message["pos_y"]
             self.z = message["pos_z"]
@@ -517,13 +528,12 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
     def determine_episode_over(self):
         # we have a few initial frames on start that are sometimes very large CTE when it's behind
         # the path just slightly. We ignore those.
-        if math.fabs(self.cte) > 2 * self.max_cte:
-            pass
+        
         # elif math.fabs(self.cte) > self.max_cte:
         #     logger.debug(f"game over: cte {self.cte}")
         #     print( f"game over: cte {self.cte}" )
         #     self.over = True
-        elif self.hit != "none":
+        if self.hit != "none" and self.hit != "Donkey_new_phys(Clone)":
             logger.debug(f"game over: hit {self.hit}")
             print( f"game over: hit {self.hit}" )
             self.over = True
@@ -563,6 +573,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             "steering": steer.__str__(),
             "throttle": throttle.__str__(),
             "brake": "0.0",
+            "info": "",
         }
         self.queue_message(msg)
 

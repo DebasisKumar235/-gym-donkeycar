@@ -31,7 +31,7 @@ class DonkeyUnitySimContoller:
         self.address = (conf["host"], conf["port"])
 
         #DonkeySpeedAndDistanceUnitySimHandler
-        self.handler = DonkeySpeed(conf=conf)
+        self.handler = DonkeyAlongYellowLineUnitySimHandler(conf=conf)
 
         self.client = SimClient(self.address, self.handler)
 
@@ -460,7 +460,7 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
         if done:
 
             if self.hit != "none":
-                val = ( -20000.0 / self.trip_duration ) / self.speed
+                val = ( -2.0 / self.trip_duration ) / self.speed
             else:
                 val = -1.0
 
@@ -473,7 +473,7 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
         #    return -1.0
         
         if self.hit != "none":
-            val += ( -200.0 / self.trip_duration ) / self.speed
+            val += ( -20.0 / self.trip_duration ) / self.speed
         else:
             val += 10.0 * self.trip_duration * self.speed
 
@@ -617,6 +617,9 @@ class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
     def send_control(self, steer: float, throttle: float) -> None:
         if not self.loaded:
             return
+        if throttle < 0.0:
+            throttle = 1.0
+
         msg = {
             "msg_type": "control",
             "steering": steer.__str__(),
