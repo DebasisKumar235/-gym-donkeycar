@@ -15,7 +15,7 @@ from gym_donkeycar.core.sim_client import SimClient
 
 logger = logging.getLogger(__name__)
 
-class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
+class DonkeySpeedAndDistanceUnitySimHandler(IMesgHandler):
     def __init__(self, conf: Dict[str, Any]):
         self.conf = conf
         self.SceneToLoad = conf["level"]
@@ -80,14 +80,9 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.current_lap_time = 0.0
         self.starting_line_index = -1
         self.lap_count = 0
-        self.trip_distance = 0.0
         self.trip_duration = 0.0
         self.trip_start_time = time.time()
 
-
-    def render(self, mode: str):
-        return self.image_array
-        
     def on_connect(self, client: SimClient) -> None:
         logger.debug("socket connected")
         self.client = client
@@ -308,7 +303,6 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.y = 0.0
         self.z = 0.0
         self.speed = 0.0
-        self.trip_distance = 0.0
         
         if self.over == True:
             self.trip_duration = 0.0
@@ -340,12 +334,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         return self.camera_img_size
 
     def take_action(self, action: np.ndarray) -> None:
-
-        # steering_type = -1 if action[0] == 0 else 1
-        # steering_angle = steering_type * action[1]
-        # throttle = action[2] / 10
-        #answer = str(round(answer, 2))
-        self.send_control( round( action[0], 1 ), round( action[1] ) )
+        self.send_control(action[0], action[1])
 
     def observe(self) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
         while self.last_received == self.time_received:
@@ -392,17 +381,15 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
 
     def calc_reward(self, done: bool) -> float:
         
-        #print( f'cte={self.cte+2} max_ctr{self.max_cte}' )
+        #print( f'Done={done}' )
         self.trip_duration = time.time() - self.trip_start_time
 
         val = 0
 
         if done:
 
-            if self.hit != "none" and self.hit != "Donkey_new_phys(Clone)":
-                val = -2.0 #( -20000.0 / self.trip_duration ) / self.speed
-            elif abs(self.cte) > 3.4:
-                val = -5.0
+            if self.hit != "none":
+                val = ( -2.0 / self.trip_duration ) / self.speed
             else:
                 val = -1.0
 
@@ -414,30 +401,12 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         #if self.cte > self.max_cte:
         #    return -1.0
         
-        #cte = self.cte + 2 # for generated-road-v0
-        cte = self.cte
-
-        # if self.hit != "none":
-        #     val += ( -200.0 / self.trip_duration ) / self.speed
-        # if cte < 0.3 and cte > -0.3:
-        #     print( "CTE branch..........")
-        #     val += 10.0/( 0.1 + cte**4 ) * self.trip_duration * self.speed
-        #     #int_val = 1.0 * 1/( 0.1 + abs(cte) ) * self.speed
-
-        #     #val += int_val #if int_val <= 5 else 5
-
-        # else:
-        #     val += 10.0/( 0.1 + cte**4 ) * self.trip_duration * self.speed
-        #     #val += -100 * abs(cte) #+ 10 * self.trip_duration * self.speed
-        #     #val += -1 * abs(cte) / self.speed #+ 10 * self.trip_duration * self.speed
-        #     #val += 100 * 1/( 0.1 + cte**4 ) * 10.0 * self.trip_duration * self.speed
-
-        if self.trip_distance > 4.0:
-            val += 1.0 #0*10.0/( 0.1 + cte**4 ) + 0.9 * self.trip_distance + 0.5 * self.speed
+        if self.hit != "none":
+            val += ( -20.0 / self.trip_duration ) / self.speed
         else:
-            val = -10.0
-        
-        print( f'Reward={val}, distance={self.trip_distance}, cte={self.cte}, speed={self.speed}' )
+            val += 10.0 * self.trip_duration * self.speed
+
+        print( f'Reward={val}, trip_ducation={self.trip_duration}, speed={self.speed}' )
 
         # going fast close to the center of lane yeilds best reward
         return val
@@ -459,9 +428,6 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             self.image_array_b = np.asarray(image_b)
 
         if "pos_x" in message:
-            if self.x != 0.0:
-                self.trip_distance += math.sqrt( (self.x - message["pos_x"])**2 + (self.z - message["pos_z"])**2 )
-
             self.x = message["pos_x"]
             self.y = message["pos_y"]
             self.z = message["pos_z"]
@@ -539,18 +505,15 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
     def determine_episode_over(self):
         # we have a few initial frames on start that are sometimes very large CTE when it's behind
         # the path just slightly. We ignore those.
-        
+        if math.fabs(self.cte) > 2 * self.max_cte:
+            pass
         # elif math.fabs(self.cte) > self.max_cte:
         #     logger.debug(f"game over: cte {self.cte}")
         #     print( f"game over: cte {self.cte}" )
         #     self.over = True
-        if self.hit != "none" and self.hit != "Donkey_new_phys(Clone)":
+        elif self.hit != "none":
             logger.debug(f"game over: hit {self.hit}")
             print( f"game over: hit {self.hit}" )
-            self.over = True
-        elif abs(self.cte) > 3.4:
-            logger.debug(f"game over: Exceeded cte with {self.cte}")
-            print( f"game over: Exceeded cte with {self.cte}" )
             self.over = True
         elif self.missed_checkpoint:
             logger.debug("missed checkpoint")
@@ -580,39 +543,17 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             else:
                 raise ValueError(f"Scene name {self.SceneToLoad} not in scene list {names}")
 
-    def _get_steering( self, steer: float ):
-        import random
-
-        thresh = random.uniform(0, 1)
-
-        new_steer = steer * random.uniform(-1, -0.5) if thresh <= 0.2 else steer
-
-        if new_steer != steer:
-            print( f'Changed steering from {steer} to {new_steer}' )
-
-        return new_steer
-
-    def _get_throttle( self, throttle: float ):
-        import random
-
-        thresh = random.uniform(0, 1)
-
-        new_throttle = throttle / random.uniform(2, 4) if thresh <= 0.1 else throttle
-
-        if new_throttle != throttle:
-            print( f'Changed throttle from {throttle} to {new_throttle}' )
-
-        return new_throttle
-
     def send_control(self, steer: float, throttle: float) -> None:
         if not self.loaded:
             return
+        if throttle < 0.0:
+            throttle = 1.0
+
         msg = {
             "msg_type": "control",
-            "steering": steer.__str__(),#str( self._get_steering( steer ) ),
-            "throttle": throttle.__str__(),#str( self._get_throttle( throttle ) ),
+            "steering": steer.__str__(),
+            "throttle": throttle.__str__(),
             "brake": "0.0",
-            "info": "",
         }
         self.queue_message(msg)
 

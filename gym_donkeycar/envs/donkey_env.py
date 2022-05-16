@@ -46,9 +46,9 @@ class DonkeyEnv(gym.Env):
     metadata = {"render.modes": ["human", "rgb_array"]}
 
     ACTION_NAMES: List[str] = ["steer", "throttle"]
-    STEER_LIMIT_LEFT: float = -1.0
-    STEER_LIMIT_RIGHT: float = 1.0
-    THROTTLE_MIN: float = 0.0
+    STEER_LIMIT_LEFT: float = -0.5
+    STEER_LIMIT_RIGHT: float = 0.5
+    THROTTLE_MIN: float = 0.1
     THROTTLE_MAX: float = 1.0
     VAL_PER_PIXEL: int = 255
 
@@ -90,6 +90,8 @@ class DonkeyEnv(gym.Env):
             high=np.array([self.STEER_LIMIT_RIGHT, self.THROTTLE_MAX]),
             dtype=np.float32,
         )
+
+        #self.action_space = spaces.Tuple( (spaces.Discrete(2), spaces.Discrete(5), spaces.Discrete(10)) )
 
         # camera sensor data
         self.observation_space = spaces.Box(0, self.VAL_PER_PIXEL, self.viewer.get_sensor_size(), dtype=np.uint8)
