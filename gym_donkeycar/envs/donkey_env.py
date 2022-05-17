@@ -46,9 +46,9 @@ class DonkeyEnv(gym.Env):
     metadata = {"render.modes": ["human", "rgb_array"]}
 
     ACTION_NAMES: List[str] = ["steer", "throttle"]
-    STEER_LIMIT_LEFT: float = -0.5
-    STEER_LIMIT_RIGHT: float = 0.5
-    THROTTLE_MIN: float = 0.1
+    STEER_LIMIT_LEFT: float = -1.0
+    STEER_LIMIT_RIGHT: float = 1.0
+    THROTTLE_MIN: float = 0.0
     THROTTLE_MAX: float = 1.0
     VAL_PER_PIXEL: int = 255
 

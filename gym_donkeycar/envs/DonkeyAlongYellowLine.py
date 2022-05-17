@@ -83,6 +83,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.trip_distance = 0.0
         self.trip_duration = 0.0
         self.trip_start_time = time.time()
+        self.amount_of_negative_reward = 0
 
 
     def render(self, mode: str):
@@ -330,6 +331,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.current_lap_time = 0.0
         self.last_lap_time = 0.0
         self.lap_count = 0
+        self.amount_of_negative_reward = 0
 
         # car
         self.roll = 0.0
@@ -340,12 +342,8 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         return self.camera_img_size
 
     def take_action(self, action: np.ndarray) -> None:
-
-        # steering_type = -1 if action[0] == 0 else 1
-        # steering_angle = steering_type * action[1]
-        # throttle = action[2] / 10
-        #answer = str(round(answer, 2))
-        self.send_control( round( action[0], 1 ), round( action[1] ) )
+        throttle = round( action[1] )
+        self.send_control( round( action[0], 1 ), throttle if throttle >= 0.1 else 0.1 )
 
     def observe(self) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
         while self.last_received == self.time_received:
@@ -397,12 +395,13 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
 
         val = 0
 
-        if done:
-
+        if done:            
             if self.hit != "none" and self.hit != "Donkey_new_phys(Clone)":
-                val = -2.0 #( -20000.0 / self.trip_duration ) / self.speed
+                val = -2.0
+            elif self.speed < 0.1:
+                val = -3.0
             elif abs(self.cte) > 3.4:
-                val = -5.0
+                val = -4.0
             else:
                 val = -1.0
 
@@ -410,32 +409,11 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
 
             return val
 
-        #print( self.current_lap_time, self.lap_count )
-        #if self.cte > self.max_cte:
-        #    return -1.0
-        
-        #cte = self.cte + 2 # for generated-road-v0
-        cte = self.cte
-
-        # if self.hit != "none":
-        #     val += ( -200.0 / self.trip_duration ) / self.speed
-        # if cte < 0.3 and cte > -0.3:
-        #     print( "CTE branch..........")
-        #     val += 10.0/( 0.1 + cte**4 ) * self.trip_duration * self.speed
-        #     #int_val = 1.0 * 1/( 0.1 + abs(cte) ) * self.speed
-
-        #     #val += int_val #if int_val <= 5 else 5
-
-        # else:
-        #     val += 10.0/( 0.1 + cte**4 ) * self.trip_duration * self.speed
-        #     #val += -100 * abs(cte) #+ 10 * self.trip_duration * self.speed
-        #     #val += -1 * abs(cte) / self.speed #+ 10 * self.trip_duration * self.speed
-        #     #val += 100 * 1/( 0.1 + cte**4 ) * 10.0 * self.trip_duration * self.speed
-
-        if self.trip_distance > 4.0:
-            val += 1.0 #0*10.0/( 0.1 + cte**4 ) + 0.9 * self.trip_distance + 0.5 * self.speed
-        else:
+        if self.speed < 0.1:
             val = -10.0
+            self.amount_of_negative_reward += 1            
+        else:
+            val += 1.0
         
         print( f'Reward={val}, distance={self.trip_distance}, cte={self.cte}, speed={self.speed}' )
 
@@ -548,10 +526,16 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             logger.debug(f"game over: hit {self.hit}")
             print( f"game over: hit {self.hit}" )
             self.over = True
+        elif self.amount_of_negative_reward > 20:
+            print( f"game over: Car stuck!" )
+            self.over = True
         elif abs(self.cte) > 3.4:
             logger.debug(f"game over: Exceeded cte with {self.cte}")
             print( f"game over: Exceeded cte with {self.cte}" )
             self.over = True
+        # elif self.speed < 0.1:
+        #     print( "game over: Speed is too low" )
+        #     self.over = True
         elif self.missed_checkpoint:
             logger.debug("missed checkpoint")
             print( "missed checkpoint" )
