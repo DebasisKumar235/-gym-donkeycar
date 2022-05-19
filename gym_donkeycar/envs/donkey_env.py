@@ -35,6 +35,8 @@ def supply_defaults(conf: Dict[str, Any]) -> None:
             print(f"Setting default: {key} {val}")
 
 
+index = 0
+
 class DonkeyEnv(gym.Env):
     """
     OpenAI Gym Environment for Donkey
@@ -131,6 +133,10 @@ class DonkeyEnv(gym.Env):
         return observation, reward, done, info
 
     def reset(self) -> np.ndarray:
+        # global index
+        # d = [ 1 ]
+        # i = d[index]
+        # index += 1
         self.viewer.reset()
         observation, reward, done, info = self.viewer.observe()
         time.sleep(1)

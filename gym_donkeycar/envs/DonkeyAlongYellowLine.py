@@ -13,6 +13,9 @@ from gym_donkeycar.core.fps import FPSTimer
 from gym_donkeycar.core.message import IMesgHandler
 from gym_donkeycar.core.sim_client import SimClient
 
+from ae.wrapper import AutoencoderWrapper
+from ae.autoencoder import load_ae
+
 logger = logging.getLogger(__name__)
 
 class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
@@ -84,10 +87,30 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.trip_duration = 0.0
         self.trip_start_time = time.time()
         self.amount_of_negative_reward = 0
+        ae_path = '/Users/v/Documents/DonkeyRL/aae-train-donkeycar/ae-128-hpc.pkl'
+        self.ae = load_ae(ae_path)
+
 
 
     def render(self, mode: str):
-        return self.image_array
+
+        CAMERA_HEIGHT = 120
+        CAMERA_WIDTH = 160
+
+        MARGIN_TOP = CAMERA_HEIGHT // 3
+
+        # Region Of Interest
+        # r = [margin_left, margin_top, width, height]
+        ROI = [0, MARGIN_TOP, CAMERA_WIDTH, CAMERA_HEIGHT - MARGIN_TOP]
+        r = ROI
+        im = self.image_array[int(r[1]) : int(r[1] + r[3]), int(r[0]) : int(r[0] + r[2])]
+        encoded = self.ae.encode(im[:, :, ::-1])
+        reconstructed_image = self.ae.decode(encoded)[0]
+
+        res = np.vstack(( im, reconstructed_image ))
+     
+        return res
+        #return self.image_array
         
     def on_connect(self, client: SimClient) -> None:
         logger.debug("socket connected")
@@ -342,7 +365,8 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         return self.camera_img_size
 
     def take_action(self, action: np.ndarray) -> None:
-        throttle = round( action[1] )
+        #print( action )
+        throttle = round( action[1], 1 )
         self.send_control( round( action[0], 1 ), throttle if throttle >= 0.1 else 0.1 )
 
     def observe(self) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
@@ -405,7 +429,8 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             else:
                 val = -1.0
 
-            print( f'Final_Reward={val}, trip_ducation={self.trip_duration}, speed={self.speed}' )
+            print( f'Final_Reward={val}, distance={round(self.trip_distance, 1)}, cte={round(self.cte,1)}, speed={round(self.speed,1)}' )
+
 
             return val
 
@@ -414,8 +439,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             self.amount_of_negative_reward += 1            
         else:
             val += 1.0
-        
-        print( f'Reward={val}, distance={self.trip_distance}, cte={self.cte}, speed={self.speed}' )
+        print( f'Reward={val}, distance={round(self.trip_distance, 1)}, cte={round(self.cte,1)}, speed={round(self.speed,1)}', end="\r" )
 
         # going fast close to the center of lane yeilds best reward
         return val
@@ -526,13 +550,13 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             logger.debug(f"game over: hit {self.hit}")
             print( f"game over: hit {self.hit}" )
             self.over = True
-        elif self.amount_of_negative_reward > 20:
+        elif self.amount_of_negative_reward > 200:
             print( f"game over: Car stuck!" )
             self.over = True
-        elif abs(self.cte) > 3.4:
-            logger.debug(f"game over: Exceeded cte with {self.cte}")
-            print( f"game over: Exceeded cte with {self.cte}" )
-            self.over = True
+        # elif abs(self.cte) > 3.4:
+        #     logger.debug(f"game over: Exceeded cte with {self.cte}")
+        #     print( f"game over: Exceeded cte with {self.cte}" )
+        #     self.over = True
         # elif self.speed < 0.1:
         #     print( "game over: Speed is too low" )
         #     self.over = True
@@ -602,6 +626,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
 
     def send_reset_car(self) -> None:
         msg = {"msg_type": "reset_car"}
+        print( msg )
         self.queue_message(msg)
 
     def send_get_scene_names(self) -> None:
