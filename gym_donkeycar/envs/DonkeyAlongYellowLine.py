@@ -87,7 +87,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.trip_duration = 0.0
         self.trip_start_time = time.time()
         self.amount_of_negative_reward = 0
-        ae_path = '/Users/v/Documents/DonkeyRL/aae-train-donkeycar/ae-128-hpc.pkl'
+        ae_path = '/Users/v/Documents/DonkeyRL/aae-train-donkeycar/ae-256-hpc.pkl'
         self.ae = load_ae(ae_path)
 
 
@@ -366,7 +366,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
 
     def take_action(self, action: np.ndarray) -> None:
         #print( action )
-        throttle = round( action[1], 1 )
+        throttle = 0.1 #round( action[1], 1 )
         self.send_control( round( action[0], 1 ), throttle if throttle >= 0.1 else 0.1 )
 
     def observe(self) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
@@ -390,6 +390,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             "car": (self.roll, self.pitch, self.yaw),
             "last_lap_time": self.last_lap_time,
             "lap_count": self.lap_count,
+            "distance": self.trip_distance,
         }
 
         # Add the second image to the dict
@@ -429,17 +430,18 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             else:
                 val = -1.0
 
+            
             print( f'Final_Reward={val}, distance={round(self.trip_distance, 1)}, cte={round(self.cte,1)}, speed={round(self.speed,1)}' )
 
 
             return val
 
         if self.speed < 0.1:
-            val = -10.0
+            val = -1.0
             self.amount_of_negative_reward += 1            
         else:
             val += 1.0
-        print( f'Reward={val}, distance={round(self.trip_distance, 1)}, cte={round(self.cte,1)}, speed={round(self.speed,1)}', end="\r" )
+        print( f'Reward={val}, distance={round(self.trip_distance, 1)}, cte={round(self.cte,1)}, speed={round(self.speed,1)}' )#, end="\r" )
 
         # going fast close to the center of lane yeilds best reward
         return val

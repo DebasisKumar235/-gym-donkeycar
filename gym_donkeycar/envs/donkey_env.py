@@ -51,7 +51,7 @@ class DonkeyEnv(gym.Env):
     STEER_LIMIT_LEFT: float = -1.0
     STEER_LIMIT_RIGHT: float = 1.0
     THROTTLE_MIN: float = 0.0
-    THROTTLE_MAX: float = 1.0
+    THROTTLE_MAX: float = 0.1
     VAL_PER_PIXEL: int = 255
 
     def __init__(self, level: str, conf: Optional[Dict[str, Any]] = None):
@@ -133,10 +133,6 @@ class DonkeyEnv(gym.Env):
         return observation, reward, done, info
 
     def reset(self) -> np.ndarray:
-        # global index
-        # d = [ 1 ]
-        # i = d[index]
-        # index += 1
         self.viewer.reset()
         observation, reward, done, info = self.viewer.observe()
         time.sleep(1)
