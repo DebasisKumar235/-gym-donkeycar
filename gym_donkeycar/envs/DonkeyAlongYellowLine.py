@@ -13,7 +13,7 @@ from gym_donkeycar.core.fps import FPSTimer
 from gym_donkeycar.core.message import IMesgHandler
 from gym_donkeycar.core.sim_client import SimClient
 
-from ae.wrapper import AutoencoderWrapper
+from ae.wrapper import AutoencoderWrapper2
 from ae.autoencoder import load_ae
 
 logger = logging.getLogger(__name__)
@@ -88,30 +88,21 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.trip_start_time = time.time()
         self.amount_of_negative_reward = 0
         ae_path = '/Users/v/Documents/DonkeyRL/aae-train-donkeycar/ae-256-hpc.pkl'
-        self.ae = load_ae(ae_path)
+        self.ae = AutoencoderWrapper2(ae_path)
 
 
 
     def render(self, mode: str):
 
-        CAMERA_HEIGHT = 120
-        CAMERA_WIDTH = 160
+        all_images, cropped_img = self.ae.encode_observation( self.image_array )
 
-        MARGIN_TOP = CAMERA_HEIGHT // 3
+        reconstructed_images = [ self.ae.decode_encoding( img ) for img in all_images ] 
+        reconstructed_images.insert( 0, cropped_img )
+        # for im in reconstructed_images:
+        #     print( np.asarray( im ).shape )
 
-        # Region Of Interest
-        # r = [margin_left, margin_top, width, height]
-        ROI = [0, MARGIN_TOP, CAMERA_WIDTH, CAMERA_HEIGHT - MARGIN_TOP]
-        r = ROI
-        im = self.image_array[int(r[1]) : int(r[1] + r[3]), int(r[0]) : int(r[0] + r[2])]
-        encoded = self.ae.encode(im[:, :, ::-1])
-        reconstructed_image = self.ae.decode(encoded)[0]
-
-        res = np.vstack(( im, reconstructed_image ))
+        return np.vstack( reconstructed_images )
      
-        return res
-        #return self.image_array
-        
     def on_connect(self, client: SimClient) -> None:
         logger.debug("socket connected")
         self.client = client
@@ -355,6 +346,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.last_lap_time = 0.0
         self.lap_count = 0
         self.amount_of_negative_reward = 0
+        self.ae.reset()
 
         # car
         self.roll = 0.0
@@ -365,9 +357,8 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         return self.camera_img_size
 
     def take_action(self, action: np.ndarray) -> None:
-        #print( action )
-        throttle = 0.1 #round( action[1], 1 )
-        self.send_control( round( action[0], 1 ), throttle if throttle >= 0.1 else 0.1 )
+        throttle = 0.1 # action[1]
+        self.send_control( round( action[0], 1 ), throttle )
 
     def observe(self) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
         while self.last_received == self.time_received:
@@ -421,12 +412,12 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         val = 0
 
         if done:            
-            if self.hit != "none" and self.hit != "Donkey_new_phys(Clone)":
+            if self.hit == 'end-collider':
+                val = 1000
+            elif self.hit != "none":
                 val = -2.0
             elif self.speed < 0.1:
                 val = -3.0
-            elif abs(self.cte) > 3.4:
-                val = -4.0
             else:
                 val = -1.0
 
@@ -437,10 +428,15 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             return val
 
         if self.speed < 0.1:
-            val = -1.0
+            val = -1.0 
             self.amount_of_negative_reward += 1            
         else:
-            val += 1.0
+            #val = 10 + (-5)*abs( self.cte - 2.0 )
+            if abs( self.cte ) < 2.6:
+                val += 1.0 # - 2.0 * (3.4 - abs( self.cte ) ) # for gen-road
+            else:
+                val -= 2.0 #* (3.4 - abs( self.cte ) ) # for gen-road
+
         print( f'Reward={val}, distance={round(self.trip_distance, 1)}, cte={round(self.cte,1)}, speed={round(self.speed,1)}' )#, end="\r" )
 
         # going fast close to the center of lane yeilds best reward
@@ -548,11 +544,11 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         #     logger.debug(f"game over: cte {self.cte}")
         #     print( f"game over: cte {self.cte}" )
         #     self.over = True
-        if self.hit != "none" and self.hit != "Donkey_new_phys(Clone)":
+        if self.hit != "none":
             logger.debug(f"game over: hit {self.hit}")
             print( f"game over: hit {self.hit}" )
             self.over = True
-        elif self.amount_of_negative_reward > 200:
+        elif self.amount_of_negative_reward > 20:
             print( f"game over: Car stuck!" )
             self.over = True
         # elif abs(self.cte) > 3.4:

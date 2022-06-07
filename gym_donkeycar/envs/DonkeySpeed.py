@@ -88,10 +88,30 @@ class DonkeySpeed(IMesgHandler):
         self.trip_duration = 0.0
         self.trip_start_time = time.time()
 
-        ae_path = '/Users/v/Documents/DonkeyRL/aae-train-donkeycar/logs/ae-32_1651319488_best.pkl'
+        ae_path = '/Users/v/Documents/DonkeyRL/aae-train-donkeycar/ae-256-hpc.pkl'
         self.ae = load_ae(ae_path)
         self.reconstructed_image = []
         self.last_reward = None
+
+    def render(self, mode: str):
+
+        CAMERA_HEIGHT = 120
+        CAMERA_WIDTH = 160
+
+        MARGIN_TOP = CAMERA_HEIGHT // 3
+
+        # Region Of Interest
+        # r = [margin_left, margin_top, width, height]
+        ROI = [0, MARGIN_TOP, CAMERA_WIDTH, CAMERA_HEIGHT - MARGIN_TOP]
+        r = ROI
+        im = self.image_array[int(r[1]) : int(r[1] + r[3]), int(r[0]) : int(r[0] + r[2])]
+        encoded = self.ae.encode(im[:, :, ::-1])
+        reconstructed_image = self.ae.decode(encoded)[0]
+
+        res = np.vstack(( im, reconstructed_image ))
+     
+        return res
+        #return self.image_array
 
     def on_connect(self, client: SimClient) -> None:
         logger.debug("socket connected")
