@@ -87,7 +87,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         self.trip_duration = 0.0
         self.trip_start_time = time.time()
         self.amount_of_negative_reward = 0
-        ae_path = '/Users/v/Documents/DonkeyRL/aae-train-donkeycar/ae-256-hpc.pkl'
+        ae_path = '/home/donkeysim/Desktop/donkeysim/ae-128-hpc.pkl'
         self.ae = AutoencoderWrapper2(ae_path)
 
 
@@ -96,10 +96,11 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
 
         all_images, cropped_img = self.ae.encode_observation( self.image_array )
 
+        #for im in all_images:
+        #    print( np.asarray( im ).shape )
+        #print( f"all_images={len(all_images)}" )
         reconstructed_images = [ self.ae.decode_encoding( img ) for img in all_images ] 
         reconstructed_images.insert( 0, cropped_img )
-        # for im in reconstructed_images:
-        #     print( np.asarray( im ).shape )
 
         return np.vstack( reconstructed_images )
      
@@ -388,7 +389,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
         if self.image_array_b is not None:
             info["image_b"] = self.image_array_b
 
-        # self.timer.on_frame()
+        self.timer.on_frame()
 
         return observation, reward, done, info
 
@@ -437,7 +438,7 @@ class DonkeyAlongYellowLineUnitySimHandler(IMesgHandler):
             else:
                 val -= 2.0 #* (3.4 - abs( self.cte ) ) # for gen-road
 
-        print( f'Reward={val}, distance={round(self.trip_distance, 1)}, cte={round(self.cte,1)}, speed={round(self.speed,1)}' )#, end="\r" )
+        #print( f'Reward={val}, distance={round(self.trip_distance, 1)}, cte={round(self.cte,1)}, speed={round(self.speed,1)}' )#, end="\r" )
 
         # going fast close to the center of lane yeilds best reward
         return val
